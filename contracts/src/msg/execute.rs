@@ -2,6 +2,6 @@ use cosmwasm_schema::cw_serde;
 
 #[cw_serde]
 pub enum ExecuteMsg {
-    Increment {},
-    Reset { count: i32 },
+    IncrementCounter {},
+    ResetCounter { count: i32 },
 }

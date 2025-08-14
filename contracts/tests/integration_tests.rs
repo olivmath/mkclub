@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use cw_counter::helpers::CwTemplateContract;
+    use cw_counter::helpers::CwCounterContract;
     use cw_counter::msg::InstantiateMsg;
     use cosmwasm_std::{Addr, Coin, Empty, Uint128};
     use cw_multi_test::{App, AppBuilder, Contract, ContractWrapper, Executor};
@@ -34,7 +34,7 @@ mod tests {
         })
     }
 
-    fn proper_instantiate() -> (App, CwTemplateContract) {
+    fn proper_instantiate() -> (App, CwCounterContract) {
         let mut app = mock_app();
         let cw_template_id = app.store_code(contract_template());
 
@@ -50,7 +50,7 @@ mod tests {
             )
             .unwrap();
 
-        let cw_template_contract = CwTemplateContract(cw_template_contract_addr);
+        let cw_template_contract = CwCounterContract(cw_template_contract_addr);
 
         (app, cw_template_contract)
     }
