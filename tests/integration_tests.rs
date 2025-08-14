@@ -1,15 +1,15 @@
 #[cfg(test)]
 mod tests {
-    use crate::helpers::CwTemplateContract;
-    use crate::msg::InstantiateMsg;
+    use cw_counter::helpers::CwTemplateContract;
+    use cw_counter::msg::InstantiateMsg;
     use cosmwasm_std::{Addr, Coin, Empty, Uint128};
     use cw_multi_test::{App, AppBuilder, Contract, ContractWrapper, Executor};
 
     pub fn contract_template() -> Box<dyn Contract<Empty>> {
         let contract = ContractWrapper::new(
-            crate::contract::execute,
-            crate::contract::instantiate,
-            crate::contract::query,
+            cw_counter::contract::execute,
+            cw_counter::contract::instantiate,
+            cw_counter::contract::query,
         );
         Box::new(contract)
     }
@@ -57,7 +57,7 @@ mod tests {
 
     mod count {
         use super::*;
-        use crate::msg::ExecuteMsg;
+        use cw_counter::msg::ExecuteMsg;
 
         #[test]
         fn count() {
