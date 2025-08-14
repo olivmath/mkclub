@@ -3,10 +3,13 @@ use cosmwasm_std::entry_point;
 use cosmwasm_std::{to_json_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
 use cw2::set_contract_version;
 
+// Correção: adicionar prefixos corretos nos imports
 use crate::error::ContractError;
-use crate::lowlevel::execute;
-use crate::lowlevel::query;
-use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
+use crate::handlers::execute;
+use crate::handlers::query;
+use crate::msg::execute::ExecuteMsg;
+use crate::msg::instantiate::InstantiateMsg;
+use crate::msg::query::QueryMsg;
 use crate::state::{State, STATE};
 
 // version info for migration info
@@ -41,8 +44,8 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::Increment {} => execute::increment(deps, info.sender),
-        ExecuteMsg::Reset { count } => execute::reset(deps, info, count),
+        ExecuteMsg::IncrementCounter {} => execute::increment(deps, info.sender),
+        ExecuteMsg::ResetCounter { count } => execute::reset(deps, info, count),
     }
 }
 

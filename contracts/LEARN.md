@@ -41,3 +41,9 @@ struct State {
 // Storage state - equivalente ao Item<State> do CosmWasm
 State public state;
 ```
+
+
+## ETAPAS:
+
+1. deploy do contrato
+2. criar o tesouro para o contrato

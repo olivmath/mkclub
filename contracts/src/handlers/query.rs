@@ -1,6 +1,6 @@
 use cosmwasm_std::{Deps, StdResult};
 
-use crate::msg::GetCountResponse;
+use crate::msg::response::GetCountResponse;
 use crate::state::STATE;
 
 pub fn count(deps: Deps) -> StdResult<GetCountResponse> {

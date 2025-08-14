@@ -2,10 +2,13 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use cosmwasm_std::{
-    to_json_binary, Addr, CosmosMsg, CustomQuery, Querier, QuerierWrapper, StdResult, WasmMsg, WasmQuery,
+    to_json_binary, Addr, CosmosMsg, CustomQuery, Querier, QuerierWrapper, StdResult, WasmMsg,
+    WasmQuery,
 };
 
-use crate::msg::{ExecuteMsg, GetCountResponse, QueryMsg};
+use crate::msg::execute::ExecuteMsg;
+use crate::msg::query::QueryMsg;
+use crate::msg::response::GetCountResponse;
 
 /// CwCounterContract is a wrapper around Addr that provides a lot of helpers
 /// for working with this.
