@@ -10,6 +10,8 @@ use crate::handlers::query;
 use crate::msg::execute::ExecuteMsg;
 use crate::msg::instantiate::InstantiateMsg;
 use crate::msg::query::QueryMsg;
+use crate::state::model::Game;
+use crate::state::storage::GAMES;
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:increment";
@@ -22,7 +24,21 @@ pub fn instantiate(
     info: MessageInfo,
     _msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
+    use crate::state::storage::{RANK, TOTAL};
+
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+
+    // Inicializar o estado
+    TOTAL.save(deps.storage, &0u64)?;
+    RANK.save(deps.storage, &Vec::new())?;
+    GAMES.save(
+        deps.storage,
+        info.sender.clone(),
+        &Game {
+            score: 0,
+            game_time: 0,
+        },
+    )?;
 
     Ok(Response::new()
         .add_attribute("method", "instantiate")
