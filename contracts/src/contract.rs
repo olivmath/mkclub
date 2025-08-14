@@ -10,7 +10,6 @@ use crate::handlers::query;
 use crate::msg::execute::ExecuteMsg;
 use crate::msg::instantiate::InstantiateMsg;
 use crate::msg::query::QueryMsg;
-use crate::state::{State, STATE};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:increment";
@@ -21,37 +20,38 @@ pub fn instantiate(
     deps: DepsMut,
     _env: Env,
     info: MessageInfo,
-    msg: InstantiateMsg,
+    _msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
-    let state = State {
-        count: msg.count,
-        owner: info.sender.clone(),
-    };
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
-    STATE.save(deps.storage, &state)?;
 
     Ok(Response::new()
         .add_attribute("method", "instantiate")
-        .add_attribute("owner", info.sender)
-        .add_attribute("count", msg.count.to_string()))
+        .add_attribute("owner", info.sender))
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
     deps: DepsMut,
     _env: Env,
-    info: MessageInfo,
+    _info: MessageInfo,
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::IncrementCounter {} => execute::increment(deps, info.sender),
-        ExecuteMsg::ResetCounter { count } => execute::reset(deps, info, count),
+        ExecuteMsg::NewGame {
+            player,
+            score,
+            game_time,
+        } => execute::new_game(deps, player, score, game_time),
     }
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::GetCount {} => to_json_binary(&query::count(deps)?),
+        QueryMsg::GetTotal {} => to_json_binary(&query::get_total(deps)?),
+        QueryMsg::GetRank {} => to_json_binary(&query::get_rank(deps)?),
+        QueryMsg::GetScoreByPlayer { player } => {
+            to_json_binary(&query::get_score_by_player(deps, player)?)
+        }
     }
 }

@@ -1,5 +1,2 @@
-mod model;
-mod storage;
-
-pub use model::State;
-pub use storage::STATE;
+pub mod model;
+pub mod storage;

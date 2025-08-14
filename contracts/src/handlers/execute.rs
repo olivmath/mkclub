@@ -1,25 +1,33 @@
-use cosmwasm_std::{Addr, DepsMut, MessageInfo, Response};
+use cosmwasm_std::{Addr, DepsMut, Response};
 
 use crate::error::ContractError;
-use crate::state::STATE;
+use crate::state::model::Game;
+use crate::state::storage::{GAMES, RANK, TOTAL};
 
-pub fn increment(deps: DepsMut, owner: Addr) -> Result<Response, ContractError> {
-    STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
-        state.count += 1;
-        state.owner = owner;
-        Ok(state)
-    })?;
+pub fn new_game(
+    deps: DepsMut,
+    player: Addr,
+    score: u64,
+    game_time: u64,
+) -> Result<Response, ContractError> {
+    // UPDATE TOTAL GAMES
 
-    Ok(Response::new().add_attribute("action", "increment"))
-}
+    let total = TOTAL.load(deps.storage)?;
+    TOTAL.save(deps.storage, &(total + 1))?;
 
-pub fn reset(deps: DepsMut, info: MessageInfo, count: i32) -> Result<Response, ContractError> {
-    STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
-        if info.sender != state.owner {
-            return Err(ContractError::Unauthorized {});
-        }
-        state.count = count;
-        Ok(state)
-    })?;
-    Ok(Response::new().add_attribute("action", "reset"))
+    // UPDATE RANK
+    let mut rank = RANK.load(deps.storage)?;
+    rank.push((score, player.clone()));
+    rank.sort_by(|a, b| b.0.cmp(&a.0));
+    RANK.save(deps.storage, &rank)?;
+
+    // SAVE GAME
+
+    GAMES.save(deps.storage, player.clone(), &Game { score, game_time })?;
+
+    Ok(Response::new()
+        .add_attribute("action", "new_game")
+        .add_attribute("player", player.to_string())
+        .add_attribute("score", score.to_string())
+        .add_attribute("game_time", game_time.to_string()))
 }
