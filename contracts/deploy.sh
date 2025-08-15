@@ -30,12 +30,10 @@ if [ -z "$1" ]; then
 fi
 
 WALLET="$1"
-INITIAL_COUNT="${2:-1}"  # Valor padrão é 1 se não fornecido
 
 echo -e "${YELLOW}Network: XION Testnet (${CHAIN_ID})${NC}"
 echo -e "${YELLOW}RPC: ${RPC_ENDPOINT}${NC}"
 echo -e "${YELLOW}Wallet: $WALLET${NC}"
-echo -e "${YELLOW}Contador inicial: $INITIAL_COUNT${NC}"
 echo ""
 
 # Verificar se o podman está rodando
@@ -55,6 +53,16 @@ if ! command -v jq &> /dev/null; then
     echo -e "${RED}Erro: jq não está instalado. Instale com: brew install jq${NC}"
     exit 1
 fi
+
+# Verificar se a wallet tem saldo suficiente
+echo -e "${BLUE}Verificando saldo da wallet...${NC}"
+BALANCE=$(xiond query bank balances $WALLET --node $RPC_ENDPOINT --output json | jq -r '.balances[] | select(.denom == "uxion") | .amount')
+if [ -z "$BALANCE" ] || [ "$BALANCE" = "null" ]; then
+    echo -e "${RED}Erro: Não foi possível verificar o saldo ou wallet sem fundos${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✓ Saldo verificado: $BALANCE uxion${NC}"
+echo ""
 
 echo -e "${BLUE}Passo 1: Compilando e otimizando o contrato...${NC}"
 
@@ -100,18 +108,30 @@ echo -e "${YELLOW}Transaction Hash: $TXHASH${NC}"
 echo ""
 
 echo -e "${BLUE}Aguardando confirmação da transação...${NC}"
-sleep 10
+sleep 15  # Aumentado para 15 segundos
 
 echo -e "${BLUE}Passo 3: Obtendo o Code ID...${NC}"
 
-# Obter o Code ID
-CODE_ID=$(xiond query tx $TXHASH \
-  --node $RPC_ENDPOINT \
-  --output json | jq -r '.events[-1].attributes[1].value')
+# Obter o Code ID com retry
+retry_count=0
+max_retries=5
+while [ $retry_count -lt $max_retries ]; do
+    CODE_ID=$(xiond query tx $TXHASH \
+      --node $RPC_ENDPOINT \
+      --output json 2>/dev/null | jq -r '.events[] | select(.type == "store_code") | .attributes[] | select(.key == "code_id") | .value' 2>/dev/null)
+    
+    if [ "$CODE_ID" != "null" ] && [ -n "$CODE_ID" ]; then
+        break
+    fi
+    
+    retry_count=$((retry_count + 1))
+    echo -e "${YELLOW}Tentativa $retry_count/$max_retries - Aguardando confirmação...${NC}"
+    sleep 10
+done
 
 if [ "$CODE_ID" = "null" ] || [ -z "$CODE_ID" ]; then
-    echo -e "${RED}Erro: Não foi possível obter o Code ID${NC}"
-    echo "Verifique se a transação foi confirmada e tente novamente"
+    echo -e "${RED}Erro: Não foi possível obter o Code ID após $max_retries tentativas${NC}"
+    echo "Verifique se a transação foi confirmada: xiond query tx $TXHASH --node $RPC_ENDPOINT"
     exit 1
 fi
 
@@ -120,14 +140,14 @@ echo ""
 
 echo -e "${BLUE}Passo 4: Instanciando o contrato...${NC}"
 
-# Mensagem de inicialização
-MSG="{ \"count\": $INITIAL_COUNT }"
+# Mensagem de inicialização (linha ~140)
+MSG="{}"
 echo -e "${YELLOW}Mensagem de inicialização: $MSG${NC}"
 
 # Instanciar o contrato
 INSTANTIATE_RES=$(xiond tx wasm instantiate $CODE_ID "$MSG" \
   --from $WALLET \
-  --label "cw-counter" \
+  --label "cw-counter-$(date +%s)" \
   --gas-prices ${GAS_PRICE}${GAS_DENOM} \
   --gas auto \
   --gas-adjustment 1.3 \
@@ -152,22 +172,44 @@ echo -e "${YELLOW}Transaction Hash da instanciação: $INSTANTIATE_TXHASH${NC}"
 echo ""
 
 echo -e "${BLUE}Aguardando confirmação da instanciação...${NC}"
-sleep 10
+sleep 15  # Aumentado para 15 segundos
 
 echo -e "${BLUE}Passo 5: Obtendo o endereço do contrato...${NC}"
 
-# Obter o endereço do contrato
-CONTRACT=$(xiond query tx $INSTANTIATE_TXHASH \
-  --node $RPC_ENDPOINT \
-  --output json | jq -r '.events[] | select(.type == "instantiate") | .attributes[] | select(.key == "_contract_address") | .value')
+# Obter o endereço do contrato com retry
+retry_count=0
+max_retries=5
+while [ $retry_count -lt $max_retries ]; do
+    CONTRACT=$(xiond query tx $INSTANTIATE_TXHASH \
+      --node $RPC_ENDPOINT \
+      --output json 2>/dev/null | jq -r '.events[] | select(.type == "instantiate") | .attributes[] | select(.key == "_contract_address") | .value' 2>/dev/null)
+    
+    if [ "$CONTRACT" != "null" ] && [ -n "$CONTRACT" ]; then
+        break
+    fi
+    
+    retry_count=$((retry_count + 1))
+    echo -e "${YELLOW}Tentativa $retry_count/$max_retries - Aguardando confirmação...${NC}"
+    sleep 10
+done
 
 if [ "$CONTRACT" = "null" ] || [ -z "$CONTRACT" ]; then
-    echo -e "${RED}Erro: Não foi possível obter o endereço do contrato${NC}"
-    echo "Verifique se a transação foi confirmada e tente novamente"
+    echo -e "${RED}Erro: Não foi possível obter o endereço do contrato após $max_retries tentativas${NC}"
+    echo "Verifique se a transação foi confirmada: xiond query tx $INSTANTIATE_TXHASH --node $RPC_ENDPOINT"
     exit 1
 fi
 
 echo -e "${GREEN}✓ Endereço do contrato obtido: $CONTRACT${NC}"
+echo ""
+
+# Verificar se o contrato foi instanciado corretamente (linha ~200)
+echo -e "${BLUE}Verificando se o contrato foi instanciado corretamente...${NC}"
+TOTAL_RESULT=$(xiond query wasm contract-state smart $CONTRACT '{"get_total": {}}' --node $RPC_ENDPOINT --output json 2>/dev/null | jq -r '.data.total' 2>/dev/null)
+if [ "$TOTAL_RESULT" = "0" ]; then
+    echo -e "${GREEN}✓ Contrato verificado - Total inicial: $TOTAL_RESULT${NC}"
+else
+    echo -e "${YELLOW}⚠ Aviso: Não foi possível verificar o estado inicial do contrato${NC}"
+fi
 echo ""
 
 echo -e "${GREEN}=== DEPLOY CONCLUÍDO COM SUCESSO ===${NC}"
@@ -176,11 +218,16 @@ echo -e "  Network: ${YELLOW}XION Testnet (${CHAIN_ID})${NC}"
 echo -e "  Wallet: ${YELLOW}$WALLET${NC}"
 echo -e "  Code ID: ${YELLOW}$CODE_ID${NC}"
 echo -e "  Endereço do Contrato: ${YELLOW}$CONTRACT${NC}"
-echo -e "  Contador Inicial: ${YELLOW}$INITIAL_COUNT${NC}"
 echo ""
 echo -e "${BLUE}Para interagir com o contrato, use:${NC}"
-echo -e "${YELLOW}# Consultar contador atual:${NC}"
-echo "xiond query wasm contract-state smart $CONTRACT '{\"get_count\": {}}' --node $RPC_ENDPOINT"
+echo -e "${YELLOW}# Consultar total de pontos:${NC}"
+echo "xiond query wasm contract-state smart $CONTRACT '{\"get_total\": {}}' --node $RPC_ENDPOINT"
+echo ""
+echo -e "${YELLOW}# Consultar ranking:${NC}"
+echo "xiond query wasm contract-state smart $CONTRACT '{\"get_rank\": {}}' --node $RPC_ENDPOINT"
+echo ""
+echo -e "${YELLOW}# Registrar novo jogo:${NC}"
+echo "xiond tx wasm execute $CONTRACT '{\"new_game\": {\"player\": \"xion1...\", \"score\": 100, \"game_time\": 60}}' --from $WALLET --chain-id $CHAIN_ID --gas-prices ${GAS_PRICE}${GAS_DENOM} --gas auto --gas-adjustment 1.3 -y --node $RPC_ENDPOINT"
 echo ""
 echo -e "${YELLOW}# Incrementar contador:${NC}"
 echo "xiond tx wasm execute $CONTRACT '{\"increment_counter\": {}}' --from $WALLET --chain-id $CHAIN_ID --gas-prices ${GAS_PRICE}${GAS_DENOM} --gas auto --gas-adjustment 1.3 -y --node $RPC_ENDPOINT"
@@ -189,12 +236,13 @@ echo -e "${YELLOW}# Resetar contador:${NC}"
 echo "xiond tx wasm execute $CONTRACT '{\"reset_counter\": {\"count\": 0}}' --from $WALLET --chain-id $CHAIN_ID --gas-prices ${GAS_PRICE}${GAS_DENOM} --gas auto --gas-adjustment 1.3 -y --node $RPC_ENDPOINT"
 
 # Salvar informações em arquivo
-echo "NETWORK=xion-testnet-1" > .env.deploy
+echo "NETWORK=$CHAIN_ID" > .env.deploy
 echo "RPC_ENDPOINT=$RPC_ENDPOINT" >> .env.deploy
 echo "WALLET=$WALLET" >> .env.deploy
 echo "CODE_ID=$CODE_ID" >> .env.deploy
 echo "CONTRACT_ADDRESS=$CONTRACT" >> .env.deploy
-echo "INITIAL_COUNT=$INITIAL_COUNT" >> .env.deploy
+echo "DEPLOY_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> .env.deploy
 
 echo ""
 echo -e "${GREEN}✓ Informações salvas em .env.deploy${NC}"
+echo -e "${BLUE}Arquivo .env.deploy criado com todas as informações do deploy${NC}"
